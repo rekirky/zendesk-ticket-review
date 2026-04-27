@@ -3,6 +3,7 @@
 let currentData = null;
 
 const extractBtn = document.getElementById("extract-btn");
+const latestBtn = document.getElementById("latest-btn");
 const statusEl = document.getElementById("status");
 const ticketMetaEl = document.getElementById("ticket-meta");
 const ticketSubjectEl = document.getElementById("ticket-subject");
@@ -99,6 +100,23 @@ function renderComments(comments) {
 
     div.appendChild(header);
     div.appendChild(body);
+
+    if (c.attachments && c.attachments.length > 0) {
+      const attachmentsEl = document.createElement("div");
+      attachmentsEl.className = "comment-attachments";
+      c.attachments.forEach((att) => {
+        const a = document.createElement("a");
+        a.className = "attachment-link";
+        a.href = att.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = (att.type === "image" ? "🖼 " : "📎 ") + att.name;
+        a.title = att.name;
+        attachmentsEl.appendChild(a);
+      });
+      div.appendChild(attachmentsEl);
+    }
+
     conversationEl.appendChild(div);
   });
 
@@ -141,12 +159,17 @@ function showLoading() {
   hideInternalCheckbox.checked = false;
 }
 
+function setBothDisabled(val) {
+  extractBtn.disabled = val;
+  latestBtn.disabled = val;
+}
+
 extractBtn.addEventListener("click", () => {
-  extractBtn.disabled = true;
+  setBothDisabled(true);
   showLoading();
 
   chrome.runtime.sendMessage({ action: "extractFromActiveTab" }, (response) => {
-    extractBtn.disabled = false;
+    setBothDisabled(false);
     if (chrome.runtime.lastError) {
       showError("Extension error: " + chrome.runtime.lastError.message);
       return;
@@ -156,6 +179,26 @@ extractBtn.addEventListener("click", () => {
       return;
     }
     showResults(response.data);
+  });
+});
+
+latestBtn.addEventListener("click", () => {
+  setBothDisabled(true);
+  showLoading();
+
+  chrome.runtime.sendMessage({ action: "extractFromActiveTab" }, (response) => {
+    setBothDisabled(false);
+    if (chrome.runtime.lastError) {
+      showError("Extension error: " + chrome.runtime.lastError.message);
+      return;
+    }
+    if (!response || !response.success) {
+      showError(response?.error || "Failed to extract ticket.");
+      return;
+    }
+    const data = response.data;
+    const latest = data.comments[data.comments.length - 1];
+    showResults({ ...data, comments: latest ? [latest] : [], commentCount: latest ? 1 : 0 });
   });
 });
 
@@ -174,6 +217,10 @@ function toPlainText(data) {
     if (c.timestamp) lines.push(`Date: ${formatTimestamp(c.timestamp)}`);
     lines.push("");
     lines.push(c.body);
+    if (c.attachments && c.attachments.length > 0) {
+      lines.push("");
+      c.attachments.forEach((att) => lines.push(`Attachment: ${att.name} (${att.url})`));
+    }
     lines.push("");
   });
   return lines.join("\n");
@@ -197,6 +244,16 @@ function toMarkdown(data) {
     if (c.timestamp) lines.push(`*${formatTimestamp(c.timestamp)}*`);
     lines.push("");
     lines.push(c.body);
+    if (c.attachments && c.attachments.length > 0) {
+      lines.push("");
+      c.attachments.forEach((att) => {
+        if (att.type === "image") {
+          lines.push(`![${att.name}](${att.url})`);
+        } else {
+          lines.push(`[📎 ${att.name}](${att.url})`);
+        }
+      });
+    }
     lines.push("");
     lines.push("---");
     lines.push("");

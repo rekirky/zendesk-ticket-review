@@ -31,7 +31,7 @@
       flex: 1;
     }
 
-    #extract-btn {
+    #extract-btn, #latest-btn {
       background: #fff;
       color: #1f73b7;
       border: none;
@@ -43,8 +43,8 @@
       white-space: nowrap;
     }
 
-    #extract-btn:hover { background: #e8f0fe; }
-    #extract-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #extract-btn:hover, #latest-btn:hover { background: #e8f0fe; }
+    #extract-btn:disabled, #latest-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     #status {
       padding: 10px 16px;
@@ -181,6 +181,30 @@
       line-height: 1.5;
     }
 
+    .comment-attachments {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .attachment-link {
+      font-size: 11px;
+      color: #1f73b7;
+      text-decoration: none;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 3px;
+      padding: 2px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      max-width: 200px;
+      text-overflow: ellipsis;
+      display: inline-block;
+    }
+
+    .attachment-link:hover { background: #dbeafe; }
+
     #empty-state {
       text-align: center;
       padding: 24px 16px;
@@ -211,6 +235,7 @@
 <header>
   <h1>Zendesk Ticket Extractor</h1>
   <button id="extract-btn">Extract Ticket</button>
+  <button id="latest-btn">Latest Update</button>
 </header>
 
 <div id="status">Open a Zendesk ticket then click Extract.</div>

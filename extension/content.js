@@ -46,6 +46,7 @@
     ],
     // Timestamp within a comment
     timestamp: [
+      '[data-test-id="timestamp-relative"]',
       "time",
       '[data-test-id="comment-timestamp"]',
       ".timestamp",
@@ -104,7 +105,28 @@
         block.appendChild(document.createTextNode("\n"));
       }
     });
-    return clone.textContent.replace(/\n{3,}/g, "\n\n").trim();
+    return clone.textContent
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  const SIGN_OFF_RE = /^(regards|kind regards|best regards|warm regards|best wishes|many thanks|thanks|thank you|cheers|sincerely|yours (faithfully|sincerely|truly)|freundliche gr[uü][ßs]e|mit freundlichen gr[uü][ßs]en|viele gr[uü][ßs]e|herzliche gr[uü][ßs]e|cordialement|bien cordialement|salutations|saludos|un saludo|atentamente|met vriendelijke groet|groeten)[,.]?\s*$/i;
+
+  function stripSignature(text) {
+    const delimMatch = text.match(/\n--[ ]?\n/);
+    if (delimMatch) return text.slice(0, delimMatch.index).trim();
+
+    const lines = text.split("\n");
+    const scanFrom = Math.max(0, lines.length - 50);
+    for (let i = scanFrom; i < lines.length; i++) {
+      if (SIGN_OFF_RE.test(lines[i].trim())) {
+        return lines.slice(0, i).join("\n").trim();
+      }
+    }
+    return text;
   }
 
   function extractTicketId() {
@@ -145,8 +167,58 @@
     return [...commentEl.classList].some((c) => /^(internal|private)$/i.test(c));
   }
 
+  function attachmentName(url, fallbackText) {
+    try {
+      const u = new URL(url);
+      return u.searchParams.get("name") || fallbackText || u.pathname.split("/").pop() || "attachment";
+    } catch (_) {
+      return fallbackText || "attachment";
+    }
+  }
+
+  function extractAttachments(bodyEl) {
+    if (!bodyEl) return [];
+    const attachments = [];
+    const seen = new Set();
+
+    bodyEl.querySelectorAll("img").forEach((img) => {
+      const src = img.src;
+      if (!src || src.startsWith("data:") || seen.has(src)) return;
+      seen.add(src);
+      attachments.push({ name: attachmentName(src, img.alt || ""), url: src, type: "image" });
+    });
+
+    bodyEl.querySelectorAll("a[href]").forEach((a) => {
+      const href = a.href;
+      if (!href || seen.has(href)) return;
+      if (!href.includes("attachment") && !a.hasAttribute("download")) return;
+      seen.add(href);
+      attachments.push({ name: attachmentName(href, a.textContent.trim()), url: href, type: "file" });
+    });
+
+    return attachments;
+  }
+
+  function getActiveConversationRoot() {
+    // Find the visible conversation container to avoid picking up comments
+    // from other open ticket tabs that Zendesk keeps in the DOM
+    const candidates = [
+      '[data-test-id="omni-log-container"]',
+      '[data-test-id="ticket-main-conversation"]',
+    ];
+    for (const sel of candidates) {
+      const els = Array.from(document.querySelectorAll(sel));
+      const visible = els.find(
+        (el) => el.offsetParent !== null && el.offsetWidth > 0
+      );
+      if (visible) return visible;
+    }
+    return document;
+  }
+
   function extractComments() {
-    const commentEls = allMatches(document, SELECTORS.comments);
+    const root = getActiveConversationRoot();
+    const commentEls = allMatches(root, SELECTORS.comments);
     if (commentEls.length === 0) return [];
 
     return commentEls.map((el, index) => {
@@ -160,8 +232,9 @@
         timestampEl?.getAttribute("title") ||
         cleanText(timestampEl) ||
         "";
-      const body = cleanText(bodyEl || el);
+      const body = stripSignature(cleanText(bodyEl || el));
       const internal = isInternal(el);
+      const attachments = extractAttachments(bodyEl);
 
       return {
         index: index + 1,
@@ -169,6 +242,7 @@
         timestamp,
         body,
         internal,
+        attachments,
       };
     });
   }
