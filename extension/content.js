@@ -95,8 +95,23 @@
 
   function cleanText(el) {
     if (!el) return "";
-    // Preserve line breaks by replacing <br> with newlines before getting text
     const clone = el.cloneNode(true);
+
+    // Replace images with inline [filename] placeholders before stripping tags
+    clone.querySelectorAll("img").forEach((img) => {
+      const src = img.src || "";
+      let name = img.alt || "";
+      if (!name) {
+        try {
+          const u = new URL(src);
+          name = u.searchParams.get("name") || u.pathname.split("/").pop() || "image";
+        } catch (_) {
+          name = "image";
+        }
+      }
+      img.replaceWith(document.createTextNode(`[${name}]`));
+    });
+
     clone.querySelectorAll("br").forEach((br) => {
       br.replaceWith("\n");
     });

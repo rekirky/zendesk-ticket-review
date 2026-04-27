@@ -290,16 +290,20 @@ async function downloadChat(data) {
   showToast(`Downloading chat + ${attachments.length} attachment${attachments.length !== 1 ? "s" : ""}`);
 
   for (const att of attachments) {
+    const name = sanitizeFilename(att.name || "attachment");
+    const dest = `${folder}/attachments/${name}`;
     try {
+      // Try fetching via content script (preserves auth session)
       const dataUrl = await fetchAttachmentAsDataUrl(att.url);
-      const name = sanitizeFilename(att.name || "attachment");
-      chrome.downloads.download({
-        url: dataUrl,
-        filename: `${folder}/attachments/${name}`,
-        saveAs: false,
+      chrome.downloads.download({ url: dataUrl, filename: dest, saveAs: false });
+    } catch (_) {
+      // CORS or fetch failure — fall back to direct download using browser cookie jar
+      chrome.downloads.download({ url: att.url, filename: dest, saveAs: false }, (id) => {
+        if (chrome.runtime.lastError || id === undefined) {
+          console.warn("Attachment download failed:", att.name, att.url, chrome.runtime.lastError?.message);
+          showToast(`Could not download: ${att.name}`);
+        }
       });
-    } catch (err) {
-      showToast(`Failed to download: ${att.name}`);
     }
   }
 }
