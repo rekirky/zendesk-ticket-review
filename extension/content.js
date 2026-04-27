@@ -23,7 +23,9 @@
       'a[href*="/tickets/"]',
     ],
     // Individual message/comment containers
+    // Zendesk Agent Workspace (Polaris) uses omni-log-comment-item ARTICLE elements
     comments: [
+      '[data-test-id="omni-log-comment-item"]',
       '[data-test-id="ticket-comment"]',
       ".comment",
       ".event.event-comment",
@@ -33,6 +35,8 @@
     ],
     // Author name within a comment
     author: [
+      '[data-test-id="omni-log-comment-user-link"]',
+      '[data-test-id="omni-log-item-sender"]',
       '[data-test-id="comment-author"]',
       ".author",
       ".comment-author",
@@ -50,18 +54,19 @@
     ],
     // Body text within a comment
     body: [
+      '[data-test-id="omni-log-message-content"]',
+      '[data-test-id="omni-log-item-message"]',
       '[data-test-id="comment-body"]',
       ".zd-comment",
       ".comment-body",
       ".event-description",
       '[class*="CommentBody"]',
-      "[dir]",
     ],
     // Whether comment is public or private/internal
     visibility: [
+      '[data-test-id="omni-log-internal-note-tag"]',
       '[data-test-id="comment-type"]',
       ".comment-type",
-      '[class*="internal"]',
       '[aria-label*="internal"]',
       '[aria-label*="private"]',
     ],
@@ -119,6 +124,10 @@
   }
 
   function isInternal(commentEl) {
+    // Zendesk Agent Workspace: aria-label on the article starts with "Internal note"
+    const ariaLabel = (commentEl.getAttribute("aria-label") || "").toLowerCase();
+    if (ariaLabel.startsWith("internal note")) return true;
+
     const visEl = firstMatch(commentEl, SELECTORS.visibility);
     if (visEl) {
       const text = visEl.textContent.toLowerCase();
@@ -132,9 +141,8 @@
         return true;
       }
     }
-    // Check classes on the comment element itself
-    const cls = commentEl.className || "";
-    return /internal|private/i.test(cls);
+    // Check individual class tokens on the comment element itself
+    return [...commentEl.classList].some((c) => /^(internal|private)$/i.test(c));
   }
 
   function extractComments() {
