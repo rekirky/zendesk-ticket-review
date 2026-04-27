@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Zendesk Ticket Extractor",
+  "version": "1.0.0",
+  "description": "Extracts and displays the full conversation from a Zendesk ticket",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "*://*.zendesk.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Zendesk Ticket Extractor",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.zendesk.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
