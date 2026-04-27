@@ -1,6 +1,18 @@
 // Service worker — relays messages between popup and content script.
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.action === "fetchAttachmentFromTab") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      if (!tab?.id) {
+        sendResponse({ success: false, error: "No active tab" });
+        return;
+      }
+      chrome.tabs.sendMessage(tab.id, { action: "fetchAsDataUrl", url: message.url }, sendResponse);
+    });
+    return true;
+  }
+
   if (message.action === "extractFromActiveTab") {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = tabs[0];

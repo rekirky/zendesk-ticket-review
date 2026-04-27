@@ -15,7 +15,21 @@ const conversationEl = document.getElementById("conversation");
 const emptyStateEl = document.getElementById("empty-state");
 const searchInput = document.getElementById("search-input");
 const hideInternalCheckbox = document.getElementById("hide-internal");
+const stripQuotedCheckbox = document.getElementById("strip-quoted");
 const toastEl = document.getElementById("toast");
+
+const QUOTE_SEPARATOR_RE = /^([-_]{4,}[\s\w]*(?:original|forwarded|reply)[\s\w]*[-_]{4,}|_{4,}|on .{5,120} wrote:\s*$|from:\s*.+\n(?:sent|date):\s*.+\nto:\s*.+\n(?:cc:\s*.+\n)?subject:\s*)/im;
+
+function stripQuotedContent(text) {
+  const match = text.match(QUOTE_SEPARATOR_RE);
+  if (!match) return text;
+  return text
+    .slice(0, match.index)
+    .split("\n")
+    .filter((line) => !/^>/.test(line.trim()))
+    .join("\n")
+    .trim();
+}
 
 function showToast(msg) {
   toastEl.textContent = msg;
@@ -50,19 +64,23 @@ function renderComments(comments) {
 
   const searchTerm = searchInput.value.toLowerCase();
   const hideInternal = hideInternalCheckbox.checked;
+  const doStripQuoted = stripQuotedCheckbox.checked;
 
   let visibleCount = 0;
 
   comments.forEach((c) => {
+    const displayBody = doStripQuoted ? stripQuotedContent(c.body) : c.body;
+    const isEmptyAfterStrip = doStripQuoted && displayBody === "";
+
     const matchesSearch =
       !searchTerm ||
       c.author.toLowerCase().includes(searchTerm) ||
-      c.body.toLowerCase().includes(searchTerm);
+      displayBody.toLowerCase().includes(searchTerm);
     const matchesFilter = !hideInternal || !c.internal;
 
     const div = document.createElement("div");
     div.className = "comment" + (c.internal ? " internal" : "");
-    if (!matchesSearch || !matchesFilter) {
+    if (!matchesSearch || !matchesFilter || isEmptyAfterStrip) {
       div.classList.add("hidden");
     } else {
       visibleCount++;
@@ -96,7 +114,7 @@ function renderComments(comments) {
 
     const body = document.createElement("div");
     body.className = "comment-body";
-    body.textContent = c.body;
+    body.textContent = displayBody;
 
     div.appendChild(header);
     div.appendChild(body);
@@ -157,6 +175,7 @@ function showLoading() {
   emptyStateEl.style.display = "none";
   searchInput.value = "";
   hideInternalCheckbox.checked = false;
+  stripQuotedCheckbox.checked = false;
 }
 
 function setBothDisabled(val) {
@@ -230,38 +249,59 @@ function sanitizeFilename(name) {
   return name.replace(/[\\/:*?"<>|]/g, "_").slice(0, 100);
 }
 
-function downloadChat(data) {
+function fetchAttachmentAsDataUrl(url) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ action: "fetchAttachmentFromTab", url }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        reject(new Error(response?.error || "fetch failed"));
+      } else {
+        resolve(response.dataUrl);
+      }
+    });
+  });
+}
+
+async function downloadChat(data) {
   const folder = `zendesk-${data.ticketId || "ticket"}`;
+
   const text = toPlainText(data);
   const blob = new Blob([text], { type: "text/plain" });
   const blobUrl = URL.createObjectURL(blob);
-
   chrome.downloads.download(
     { url: blobUrl, filename: `${folder}/chat.txt`, saveAs: false },
     () => URL.revokeObjectURL(blobUrl)
   );
 
-  // Download each attachment into an attachments subfolder
   const seen = new Set();
+  const attachments = [];
   data.comments.forEach((c) => {
-    if (!c.attachments) return;
-    c.attachments.forEach((att) => {
+    (c.attachments || []).forEach((att) => {
       if (seen.has(att.url)) return;
       seen.add(att.url);
-      const name = sanitizeFilename(att.name || "attachment");
-      chrome.downloads.download({
-        url: att.url,
-        filename: `${folder}/attachments/${name}`,
-        saveAs: false,
-      });
+      attachments.push(att);
     });
   });
 
-  const attCount = [...new Set(
-    data.comments.flatMap((c) => (c.attachments || []).map((a) => a.url))
-  )].length;
+  if (attachments.length === 0) {
+    showToast("Downloading chat");
+    return;
+  }
 
-  showToast(attCount > 0 ? `Downloading chat + ${attCount} attachment${attCount !== 1 ? "s" : ""}` : "Downloading chat");
+  showToast(`Downloading chat + ${attachments.length} attachment${attachments.length !== 1 ? "s" : ""}`);
+
+  for (const att of attachments) {
+    try {
+      const dataUrl = await fetchAttachmentAsDataUrl(att.url);
+      const name = sanitizeFilename(att.name || "attachment");
+      chrome.downloads.download({
+        url: dataUrl,
+        filename: `${folder}/attachments/${name}`,
+        saveAs: false,
+      });
+    } catch (err) {
+      showToast(`Failed to download: ${att.name}`);
+    }
+  }
 }
 
 function copyToClipboard(text) {
@@ -293,5 +333,9 @@ searchInput.addEventListener("input", () => {
 });
 
 hideInternalCheckbox.addEventListener("change", () => {
+  if (currentData) renderComments(currentData.comments);
+});
+
+stripQuotedCheckbox.addEventListener("change", () => {
   if (currentData) renderComments(currentData.comments);
 });

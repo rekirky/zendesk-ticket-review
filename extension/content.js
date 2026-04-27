@@ -129,6 +129,25 @@
     return text;
   }
 
+  // Matches the start of forwarded/quoted email content
+  const QUOTE_SEPARATOR_RE = /^([-_]{4,}[\s\w]*(?:original|forwarded|reply)[\s\w]*[-_]{4,}|_{4,}|on .{5,120} wrote:\s*$|from:\s*.+\n(?:sent|date):\s*.+\nto:\s*.+\n(?:cc:\s*.+\n)?subject:\s*)/im;
+
+  function stripQuotedContent(text) {
+    const match = text.match(QUOTE_SEPARATOR_RE);
+    if (!match) return text;
+    // Also strip any trailing blank lines left by > quote lines above the separator
+    return text
+      .slice(0, match.index)
+      .split("\n")
+      .filter((line, i, arr) => {
+        // Drop leading > lines at the tail of the remaining content
+        if (/^>/.test(line.trim())) return false;
+        return true;
+      })
+      .join("\n")
+      .trim();
+  }
+
   function extractTicketId() {
     // Try URL first — most reliable
     const match = window.location.pathname.match(/\/tickets\/(\d+)/);
@@ -263,7 +282,6 @@
     };
   }
 
-  // Listen for extraction requests from the popup
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.action === "extractTicket") {
       try {
@@ -273,6 +291,19 @@
         sendResponse({ success: false, error: err.message });
       }
     }
-    return true; // keep channel open for async response
+
+    if (message.action === "fetchAsDataUrl") {
+      fetch(message.url, { credentials: "include" })
+        .then((r) => r.blob())
+        .then((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () =>
+            sendResponse({ success: true, dataUrl: reader.result });
+          reader.readAsDataURL(blob);
+        })
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+    }
+
+    return true;
   });
 })();
