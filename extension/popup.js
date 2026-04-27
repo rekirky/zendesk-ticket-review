@@ -128,6 +128,7 @@ function showError(msg) {
 }
 
 function showLoading() {
+  currentData = null;
   statusEl.textContent = "Extracting ticket…";
   statusEl.className = "";
   statusEl.style.display = "block";
@@ -136,6 +137,8 @@ function showLoading() {
   filterBarEl.style.display = "none";
   conversationEl.innerHTML = "";
   emptyStateEl.style.display = "none";
+  searchInput.value = "";
+  hideInternalCheckbox.checked = false;
 }
 
 extractBtn.addEventListener("click", () => {
