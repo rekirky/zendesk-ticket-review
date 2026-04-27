@@ -226,39 +226,42 @@ function toPlainText(data) {
   return lines.join("\n");
 }
 
-function toMarkdown(data) {
-  const lines = [
-    `# Ticket ${data.ticketId ? "#" + data.ticketId : ""}: ${data.subject}`,
-    "",
-    `**URL:** ${data.url}  `,
-    `**Extracted:** ${formatTimestamp(data.extractedAt)}  `,
-    `**Messages:** ${data.commentCount}`,
-    "",
-    "---",
-    "",
-  ];
+function sanitizeFilename(name) {
+  return name.replace(/[\\/:*?"<>|]/g, "_").slice(0, 100);
+}
+
+function downloadChat(data) {
+  const folder = `zendesk-${data.ticketId || "ticket"}`;
+  const text = toPlainText(data);
+  const blob = new Blob([text], { type: "text/plain" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  chrome.downloads.download(
+    { url: blobUrl, filename: `${folder}/chat.txt`, saveAs: false },
+    () => URL.revokeObjectURL(blobUrl)
+  );
+
+  // Download each attachment into an attachments subfolder
+  const seen = new Set();
   data.comments.forEach((c) => {
-    lines.push(
-      `### #${c.index} — ${c.author}${c.internal ? " *(Internal)*" : ""}`
-    );
-    if (c.timestamp) lines.push(`*${formatTimestamp(c.timestamp)}*`);
-    lines.push("");
-    lines.push(c.body);
-    if (c.attachments && c.attachments.length > 0) {
-      lines.push("");
-      c.attachments.forEach((att) => {
-        if (att.type === "image") {
-          lines.push(`![${att.name}](${att.url})`);
-        } else {
-          lines.push(`[📎 ${att.name}](${att.url})`);
-        }
+    if (!c.attachments) return;
+    c.attachments.forEach((att) => {
+      if (seen.has(att.url)) return;
+      seen.add(att.url);
+      const name = sanitizeFilename(att.name || "attachment");
+      chrome.downloads.download({
+        url: att.url,
+        filename: `${folder}/attachments/${name}`,
+        saveAs: false,
       });
-    }
-    lines.push("");
-    lines.push("---");
-    lines.push("");
+    });
   });
-  return lines.join("\n");
+
+  const attCount = [...new Set(
+    data.comments.flatMap((c) => (c.attachments || []).map((a) => a.url))
+  )].length;
+
+  showToast(attCount > 0 ? `Downloading chat + ${attCount} attachment${attCount !== 1 ? "s" : ""}` : "Downloading chat");
 }
 
 function copyToClipboard(text) {
@@ -278,9 +281,9 @@ document.getElementById("copy-json-btn").addEventListener("click", () => {
   copyToClipboard(JSON.stringify(currentData, null, 2));
 });
 
-document.getElementById("copy-markdown-btn").addEventListener("click", () => {
+document.getElementById("download-chat-btn").addEventListener("click", () => {
   if (!currentData) return;
-  copyToClipboard(toMarkdown(currentData));
+  downloadChat(currentData);
 });
 
 // --- Filters ---
