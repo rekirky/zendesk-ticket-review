@@ -16,7 +16,50 @@ const emptyStateEl = document.getElementById("empty-state");
 const searchInput = document.getElementById("search-input");
 const hideInternalCheckbox = document.getElementById("hide-internal");
 const stripQuotedCheckbox = document.getElementById("strip-quoted");
+const includePromptCheckbox = document.getElementById("include-prompt");
+const promptSectionEl = document.getElementById("prompt-section");
+const promptToggleRow = document.getElementById("prompt-toggle-row");
+const promptToggleIcon = document.getElementById("prompt-toggle-icon");
+const promptBodyEl = document.getElementById("prompt-body");
+const promptTextEl = document.getElementById("prompt-text");
+const promptSavedEl = document.getElementById("prompt-saved");
 const toastEl = document.getElementById("toast");
+
+// --- Prompt storage ---
+
+try {
+  chrome.storage.local.get("systemPrompt", (result) => {
+    if (result?.systemPrompt) promptTextEl.value = result.systemPrompt;
+  });
+} catch (_) {}
+
+let saveTimer;
+promptTextEl.addEventListener("input", () => {
+  clearTimeout(saveTimer);
+  promptSavedEl.textContent = "Saving…";
+  saveTimer = setTimeout(() => {
+    try {
+      chrome.storage.local.set({ systemPrompt: promptTextEl.value }, () => {
+        promptSavedEl.textContent = "Saved";
+        setTimeout(() => { promptSavedEl.textContent = ""; }, 1500);
+      });
+    } catch (_) {
+      promptSavedEl.textContent = "";
+    }
+  }, 600);
+});
+
+promptToggleRow.addEventListener("click", () => {
+  const isOpen = promptBodyEl.style.display !== "none";
+  promptBodyEl.style.display = isOpen ? "none" : "block";
+  promptToggleIcon.classList.toggle("open", !isOpen);
+});
+
+function getPromptPrefix() {
+  const text = promptTextEl.value.trim();
+  if (!text || !includePromptCheckbox.checked) return "";
+  return `${text}\n\n---\n\n`;
+}
 
 const QUOTE_SEPARATOR_RE = /^([-_]{4,}[\s\w]*(?:original|forwarded|reply)[\s\w]*[-_]{4,}|_{4,}|on .{5,120} wrote:\s*$|from:\s*.+\n(?:sent|date):\s*.+\nto:\s*.+\n(?:cc:\s*.+\n)?subject:\s*)/im;
 
@@ -151,8 +194,20 @@ function showResults(data) {
   ticketIdLabelEl.textContent = data.ticketId ? `Ticket #${data.ticketId}` : "";
   ticketCommentCountEl.textContent = `${data.commentCount} message${data.commentCount !== 1 ? "s" : ""}`;
 
+  const fieldsRow = document.getElementById("ticket-fields-row");
+  fieldsRow.innerHTML = "";
+  if (data.fields) {
+    Object.entries(data.fields).forEach(([key, val]) => {
+      const span = document.createElement("span");
+      span.style.cssText = "background:#e0f2fe;color:#0369a1;border-radius:3px;padding:1px 6px;font-size:10px;white-space:nowrap;";
+      span.textContent = `${key}: ${val}`;
+      fieldsRow.appendChild(span);
+    });
+  }
+
   toolbarEl.style.display = "flex";
   filterBarEl.style.display = "flex";
+  promptSectionEl.style.display = "block";
 
   renderComments(data.comments);
 }
@@ -171,11 +226,13 @@ function showLoading() {
   ticketMetaEl.style.display = "none";
   toolbarEl.style.display = "none";
   filterBarEl.style.display = "none";
+  promptSectionEl.style.display = "none";
   conversationEl.innerHTML = "";
   emptyStateEl.style.display = "none";
   searchInput.value = "";
   hideInternalCheckbox.checked = false;
   stripQuotedCheckbox.checked = false;
+  includePromptCheckbox.checked = false;
 }
 
 function setBothDisabled(val) {
@@ -228,8 +285,11 @@ function toPlainText(data) {
     `Ticket: ${data.ticketId ? "#" + data.ticketId : ""}  ${data.subject}`,
     `URL: ${data.url}`,
     `Extracted: ${formatTimestamp(data.extractedAt)}`,
-    "",
   ];
+  if (data.fields && Object.keys(data.fields).length > 0) {
+    Object.entries(data.fields).forEach(([k, v]) => lines.push(`${k}: ${v}`));
+  }
+  lines.push("");
   data.comments.forEach((c) => {
     lines.push(`--- Message #${c.index} ---`);
     lines.push(`From: ${c.author}${c.internal ? " [Internal]" : ""}`);
@@ -264,7 +324,7 @@ function fetchAttachmentAsDataUrl(url) {
 async function downloadChat(data) {
   const folder = `zendesk-${data.ticketId || "ticket"}`;
 
-  const text = toPlainText(data);
+  const text = getPromptPrefix() + toPlainText(data);
   const blob = new Blob([text], { type: "text/plain" });
   const blobUrl = URL.createObjectURL(blob);
   chrome.downloads.download(
@@ -317,12 +377,15 @@ function copyToClipboard(text) {
 
 document.getElementById("copy-text-btn").addEventListener("click", () => {
   if (!currentData) return;
-  copyToClipboard(toPlainText(currentData));
+  copyToClipboard(getPromptPrefix() + toPlainText(currentData));
 });
 
 document.getElementById("copy-json-btn").addEventListener("click", () => {
   if (!currentData) return;
-  copyToClipboard(JSON.stringify(currentData, null, 2));
+  const payload = includePromptCheckbox.checked && promptTextEl.value.trim()
+    ? { systemPrompt: promptTextEl.value.trim(), ...currentData }
+    : currentData;
+  copyToClipboard(JSON.stringify(payload, null, 2));
 });
 
 document.getElementById("download-chat-btn").addEventListener("click", () => {

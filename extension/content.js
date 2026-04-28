@@ -210,25 +210,44 @@
     }
   }
 
-  function extractAttachments(bodyEl) {
-    if (!bodyEl) return [];
+  function extractAttachments(bodyEl, commentEl) {
     const attachments = [];
     const seen = new Set();
 
-    bodyEl.querySelectorAll("img").forEach((img) => {
-      const src = img.src;
-      if (!src || src.startsWith("data:") || seen.has(src)) return;
-      seen.add(src);
-      attachments.push({ name: attachmentName(src, img.alt || ""), url: src, type: "image" });
-    });
+    // Inline images within the message body
+    if (bodyEl) {
+      bodyEl.querySelectorAll("img").forEach((img) => {
+        const src = img.src;
+        if (!src || src.startsWith("data:") || seen.has(src)) return;
+        seen.add(src);
+        attachments.push({ name: attachmentName(src, img.alt || ""), url: src, type: "image" });
+      });
+    }
 
-    bodyEl.querySelectorAll("a[href]").forEach((a) => {
-      const href = a.href;
-      if (!href || seen.has(href)) return;
-      if (!href.includes("attachment") && !a.hasAttribute("download")) return;
-      seen.add(href);
-      attachments.push({ name: attachmentName(href, a.textContent.trim()), url: href, type: "file" });
-    });
+    // File attachments in the attachment-group-container (sibling of the body,
+    // uses data-test-id="attachment-thumbnail" anchor elements)
+    const searchRoot = commentEl || bodyEl;
+    if (searchRoot) {
+      searchRoot.querySelectorAll('[data-test-id="attachment-thumbnail"]').forEach((a) => {
+        const href = a.href;
+        if (!href || seen.has(href)) return;
+        seen.add(href);
+        const name = attachmentName(href, a.textContent.trim());
+        const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
+        attachments.push({ name, url: href, type: isImage ? "image" : "file" });
+      });
+
+      // Fallback: any attachment links not caught above
+      searchRoot.querySelectorAll("a[href]").forEach((a) => {
+        const href = a.href;
+        if (!href || seen.has(href)) return;
+        if (!href.includes("attachment") && !a.hasAttribute("download")) return;
+        seen.add(href);
+        const name = attachmentName(href, a.textContent.trim());
+        const isImage = /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name);
+        attachments.push({ name, url: href, type: isImage ? "image" : "file" });
+      });
+    }
 
     return attachments;
   }
@@ -268,7 +287,7 @@
         "";
       const body = stripSignature(cleanText(bodyEl || el));
       const internal = isInternal(el);
-      const attachments = extractAttachments(bodyEl);
+      const attachments = extractAttachments(bodyEl, el);
 
       return {
         index: index + 1,
@@ -281,15 +300,38 @@
     });
   }
 
+  function extractTicketFields() {
+    const fields = {};
+
+    // Custom dropdown fields — data-test-id starts with "ticket-form-field-dropdown-field-"
+    document.querySelectorAll('[data-test-id^="ticket-form-field-dropdown-field-"]').forEach((container) => {
+      const btn = container.querySelector('[data-test-id="ticket-form-field-dropdown-button"]');
+      if (!btn) return;
+      const value = btn.textContent.trim();
+      if (!value || value === "-") return;
+
+      // Label = full container text minus the value text, stripped of trailing *
+      const label = container.textContent.trim()
+        .replace(value, "")
+        .replace(/\*$/, "")
+        .trim();
+      if (label) fields[label] = value;
+    });
+
+    return fields;
+  }
+
   function extractTicket() {
     const ticketId = extractTicketId();
     const subject = extractSubject();
     const comments = extractComments();
+    const fields = extractTicketFields();
     const url = window.location.href;
 
     return {
       ticketId,
       subject,
+      fields,
       url,
       extractedAt: new Date().toISOString(),
       commentCount: comments.length,

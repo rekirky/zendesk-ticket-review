@@ -125,6 +125,61 @@
       gap: 4px;
     }
 
+    #prompt-section {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    #prompt-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 16px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      color: #374151;
+      user-select: none;
+    }
+
+    #prompt-toggle-row:hover { background: #f9fafb; }
+
+    #prompt-toggle-icon {
+      font-size: 10px;
+      color: #9ca3af;
+      transition: transform 0.15s;
+    }
+
+    #prompt-toggle-icon.open { transform: rotate(180deg); }
+
+    #prompt-body {
+      padding: 0 16px 10px;
+    }
+
+    #prompt-text {
+      width: 100%;
+      min-height: 80px;
+      max-height: 160px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+      box-sizing: border-box;
+      color: #374151;
+    }
+
+    #prompt-text:focus { border-color: #1f73b7; }
+
+    #prompt-saved {
+      font-size: 10px;
+      color: #6b7280;
+      margin-top: 4px;
+      min-height: 14px;
+    }
+
     #conversation {
       max-height: 420px;
       overflow-y: auto;
@@ -246,6 +301,7 @@
     <span id="ticket-id-label"></span>
     <span id="ticket-comment-count"></span>
   </div>
+  <div id="ticket-fields-row" class="meta-row" style="margin-top:2px;flex-wrap:wrap;gap:6px;"></div>
 </div>
 
 <div id="toolbar" style="display:none">
@@ -264,6 +320,21 @@
     <input type="checkbox" id="strip-quoted" />
     Strip quoted
   </label>
+  <label>
+    <input type="checkbox" id="include-prompt" />
+    Include prompt
+  </label>
+</div>
+
+<div id="prompt-section" style="display:none">
+  <div id="prompt-toggle-row">
+    <span>System prompt</span>
+    <span id="prompt-toggle-icon">▼</span>
+  </div>
+  <div id="prompt-body" style="display:none">
+    <textarea id="prompt-text" placeholder="e.g. You are a software engineer. Analyse the texts and attachments and help with a response to the client."></textarea>
+    <div id="prompt-saved"></div>
+  </div>
 </div>
 
 <div id="conversation"></div>

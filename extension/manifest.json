@@ -7,7 +7,8 @@
     "activeTab",
     "scripting",
     "clipboardWrite",
-    "downloads"
+    "downloads",
+    "storage"
   ],
   "host_permissions": [
     "*://*.zendesk.com/*"
