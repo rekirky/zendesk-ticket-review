@@ -300,11 +300,30 @@
     });
   }
 
+  function getActiveTicketForm() {
+    // Find the visible ticket form/sidebar to avoid picking up fields from other open ticket tabs
+    const candidates = [
+      '[data-test-id="ticket-form-panel"]',
+      '[data-test-id="ticket-sidebar"]',
+      '.ticket-sidebar',
+      'form[data-test-id*="ticket"]',
+    ];
+    for (const sel of candidates) {
+      const els = Array.from(document.querySelectorAll(sel));
+      const visible = els.find(
+        (el) => el.offsetParent !== null && el.offsetWidth > 0
+      );
+      if (visible) return visible;
+    }
+    return document;
+  }
+
   function extractTicketFields() {
     const fields = {};
+    const root = getActiveTicketForm();
 
     // Custom dropdown fields — data-test-id starts with "ticket-form-field-dropdown-field-"
-    document.querySelectorAll('[data-test-id^="ticket-form-field-dropdown-field-"]').forEach((container) => {
+    root.querySelectorAll('[data-test-id^="ticket-form-field-dropdown-field-"]').forEach((container) => {
       const btn = container.querySelector('[data-test-id="ticket-form-field-dropdown-button"]');
       if (!btn) return;
       const value = btn.textContent.trim();

@@ -323,12 +323,14 @@ function fetchAttachmentAsDataUrl(url) {
 
 async function downloadChat(data) {
   const folder = `zendesk-${data.ticketId || "ticket"}`;
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+  const chatFilename = `chat_${timestamp}.txt`;
 
   const text = getPromptPrefix() + toPlainText(data);
   const blob = new Blob([text], { type: "text/plain" });
   const blobUrl = URL.createObjectURL(blob);
   chrome.downloads.download(
-    { url: blobUrl, filename: `${folder}/chat.txt`, saveAs: false },
+    { url: blobUrl, filename: `${folder}/${chatFilename}`, saveAs: false },
     () => URL.revokeObjectURL(blobUrl)
   );
 
