@@ -1,5 +1,7 @@
 # Zendesk Ticket Extractor
 
+[![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-black?logo=anthropic)](https://claude.ai/code)
+
 A Chrome extension for extracting the full conversation history from a Zendesk ticket, ready to copy into AI tools, documentation, or anywhere else.
 
 ## Features
